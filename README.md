@@ -51,8 +51,8 @@ Unlike many projects that rely on heavy LLMs (like GPT-4), we chose a **Speciali
 ---
 
 ## 📐 Architecture Diagram
-![Architecture Diagram](docs/architecture.png)
-*(Please place your architecture PNG in the `docs/` folder)*
+![Architecture Diagram](assets/docs/ARCHITECTUREDIAGRAM.jpeg)
+*(System Interconnection & Data Flow)*
 
 ---
 
@@ -65,8 +65,8 @@ Our real-time Power BI Dashboard connected to Cosmos DB allows stakeholders to v
 - Most frequent PII categories protected.
 - Overall Ethical Health Score of the organization.
 
-![Power BI Screenshot](docs/dashboard.png)
-*(Please place your dashboard PNG in the `docs/` folder)*
+![Power BI Screenshot](assets/docs/DashboardPowerbifinal.png)
+*(Final Compliance Insights Dashboard)*
 
 ---
 
