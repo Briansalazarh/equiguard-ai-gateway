@@ -4,9 +4,9 @@
 ---
 
 ## 👥 Meet the Team
-**Lead Architect**: Brian Salazar  
-**Innovation Partner**: Mario Bravo  
-**Location**: Puente Alto, Chile 🇨🇱 | Innovation Studio 2026
+**Lead Architect**: Brian Salazar H 
+**Innovation Partner**: Mario Seminario B
+**Location**: Chile 🇨🇱, Perú pe | Innovation Studio 2026
 
 ---
 
@@ -106,6 +106,12 @@ mvn clean package azure-functions:run
 This project was built during the **AI Innovation Challenge - Spring Edition 2026** to demonstrate that Responsible AI is not just a policy, but a programmable architectural layer.
 
 ---
+---
 
+## 📺 Demo & Resources
+
+* **Video Demo:** [Watch on YouTube](https://youtu.be/CwuBA8sM2tA)
+* **Pitch Deck:** [Download Presentation (PPTX)](./EquiGuard-AI-Innovation-with-Integrity.pptx)
+---
 ## 📄 License
 This project is licensed under the MIT License - see the LICENSE file for details.
