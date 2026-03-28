@@ -1,0 +1,33 @@
+# Azure Functions Artifacts
+bin
+obj
+target/
+.template.dat
+.python_packages/
+.env
+.venv/
+env/
+dist/
+build/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.lnk
+*.log
+.DS_Store
+
+# Sensitive Secrets (CRITICAL)
+local.settings.json
+local.settings.json.user
+*.key
+*.pem
+secrets.property
+
+# Maven
+release.properties
+pom.xml.releaseBackup
+pom.xml.tagMergeBackup
+pom.xml.next
+release.properties
