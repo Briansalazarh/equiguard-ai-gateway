@@ -110,7 +110,6 @@ This project was built during the **AI Innovation Challenge - Spring Edition 202
 
 ## 📺 Demo & Resources
 
-* **Video Demo:** [Watch on YouTube](https://youtu.be/CwuBA8sM2tA)
 * **Pitch Deck:** [Download Presentation (PPTX)](./EquiGuard-AI-Innovation-with-Integrity.pptx)
 ---
 ## 📄 License
