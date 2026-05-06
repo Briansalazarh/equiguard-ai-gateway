@@ -91,7 +91,7 @@ components:
         content:
           type: string
           description: |
-            Raw text to audit. Must not be blank and must not exceed 5 120
+            Raw text to audit. Must not be blank and must not exceed 5120
             characters (Azure AI Language limit per document).
           maxLength: 5120
           example: "Call John Smith at +56 9 1234 5678 to confirm the interview."
