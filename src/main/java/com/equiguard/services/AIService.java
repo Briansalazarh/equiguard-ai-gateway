@@ -10,11 +10,15 @@ import com.azure.ai.textanalytics.TextAnalyticsClientBuilder;
 import com.azure.ai.textanalytics.models.PiiEntity;
 import com.azure.ai.textanalytics.models.PiiEntityCollection;
 import com.azure.core.credential.AzureKeyCredential;
+import com.azure.core.http.policy.ExponentialBackoff;
+import com.azure.core.http.policy.RetryPolicy;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.equiguard.config.AppConfig;
 import com.equiguard.exceptions.AIProcessingException;
 import com.equiguard.models.EthicsAuditResult;
 import com.equiguard.models.PiiEntityModel;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,11 +27,18 @@ import java.util.logging.Logger;
 /**
  * Enterprise AIService handling language APIs with strict error handling and
  * domain logic encapsulation.
+ * <p>
+ * Authentication priority: if a key environment variable is set it is used
+ * directly (AzureKeyCredential); otherwise the service falls back to
+ * DefaultAzureCredential (Managed Identity / workload identity).
  */
 public class AIService {
 
     private static final Logger logger = Logger.getLogger(AIService.class.getName());
     private static volatile AIService instance;
+
+    /** Maximum retry attempts for transient Azure AI service errors. */
+    private static final int MAX_RETRIES = 3;
 
     private final TextAnalyticsClient languageClient;
     private final ContentSafetyClient safetyClient;
@@ -35,21 +46,11 @@ public class AIService {
     private AIService() {
         logger.info("Starting initialization of Azure AI Services...");
         try {
-            // Utilizando el AppConfig (Fail-Fast pattern)
             String langEndpoint = AppConfig.getRequiredEnv("AI_LANGUAGE_ENDPOINT");
-            String langKey = AppConfig.getRequiredEnv("AI_LANGUAGE_KEY");
             String safetyEndpoint = AppConfig.getRequiredEnv("CONTENT_SAFETY_ENDPOINT");
-            String safetyKey = AppConfig.getRequiredEnv("CONTENT_SAFETY_KEY");
 
-            this.languageClient = new TextAnalyticsClientBuilder()
-                    .endpoint(langEndpoint)
-                    .credential(new AzureKeyCredential(langKey))
-                    .buildClient();
-
-            this.safetyClient = new ContentSafetyClientBuilder()
-                    .endpoint(safetyEndpoint)
-                    .credential(new AzureKeyCredential(safetyKey))
-                    .buildClient();
+            this.languageClient = buildLanguageClient(langEndpoint);
+            this.safetyClient = buildSafetyClient(safetyEndpoint);
 
             logger.info("Azure AI Services initialized successfully.");
         } catch (Exception e) {
@@ -60,7 +61,42 @@ public class AIService {
     }
 
     /**
-     * Singleton Pattern (Thread-safe)
+     * Package-private constructor for unit testing — accepts pre-built clients.
+     */
+    AIService(TextAnalyticsClient languageClient, ContentSafetyClient safetyClient) {
+        this.languageClient = languageClient;
+        this.safetyClient = safetyClient;
+    }
+
+    private TextAnalyticsClient buildLanguageClient(String endpoint) {
+        String key = AppConfig.getOptionalEnv("AI_LANGUAGE_KEY", null);
+        var builder = new TextAnalyticsClientBuilder()
+                .endpoint(endpoint)
+                .retryPolicy(new RetryPolicy(
+                        new ExponentialBackoff(MAX_RETRIES, Duration.ofSeconds(1), Duration.ofSeconds(16))));
+        if (key != null) {
+            builder.credential(new AzureKeyCredential(key));
+        } else {
+            logger.info("AI_LANGUAGE_KEY not set — using DefaultAzureCredential (Managed Identity).");
+            builder.credential(new DefaultAzureCredentialBuilder().build());
+        }
+        return builder.buildClient();
+    }
+
+    private ContentSafetyClient buildSafetyClient(String endpoint) {
+        String key = AppConfig.getOptionalEnv("CONTENT_SAFETY_KEY", null);
+        var builder = new ContentSafetyClientBuilder().endpoint(endpoint);
+        if (key != null) {
+            builder.credential(new AzureKeyCredential(key));
+        } else {
+            logger.info("CONTENT_SAFETY_KEY not set — using DefaultAzureCredential (Managed Identity).");
+            builder.credential(new DefaultAzureCredentialBuilder().build());
+        }
+        return builder.buildClient();
+    }
+
+    /**
+     * Singleton Pattern (Thread-safe double-checked locking).
      */
     public static AIService getInstance() {
         if (instance == null) {
@@ -78,18 +114,21 @@ public class AIService {
 
     /**
      * Intercepts and masks Personally Identifiable Information from the content.
+     *
+     * @param text     the raw text to analyse
+     * @param language BCP-47 language tag (e.g. "es", "en") for improved accuracy
      */
-    public PiiResult maskPII(String text) {
+    public PiiResult maskPII(String text, String language) {
         if (text == null || text.isBlank()) {
             return new PiiResult(text, new ArrayList<>());
         }
 
         try {
-            PiiEntityCollection piiEntities = languageClient.recognizePiiEntities(text);
+            PiiEntityCollection piiEntities = languageClient.recognizePiiEntities(text, language);
             List<PiiEntityModel> extractedEntities = new ArrayList<>();
 
-            // Sort by descending offset to safely replace string parts iteratively sin
-            // alterar los índices restantes
+            // Sort by descending offset to safely replace string parts without
+            // altering the remaining indices
             List<PiiEntity> sortedEntities = piiEntities.stream()
                     .sorted(Comparator.comparingInt(PiiEntity::getOffset).reversed())
                     .toList();
@@ -105,7 +144,7 @@ public class AIService {
                         entity.getOffset(),
                         entity.getLength()));
 
-                // Enmascaramiento: [CategoryName] (ej: [Person], [DateTime])
+                // Masking: [CategoryName] (e.g. [Person], [PhoneNumber])
                 String replacement = "[" + entity.getCategory().toString() + "]";
                 maskedBuilder.replace(entity.getOffset(), entity.getOffset() + entity.getLength(), replacement);
             }
@@ -120,9 +159,8 @@ public class AIService {
     /**
      * Executes Ethical Score Audit according to severe enterprise regulations.
      * Evaluates Hate, SelfHarm, Sexual, and Violence categories.
-     * 
-     * @return EthicsAuditResult indicating overall score (0-100) and safety
-     *         boolean.
+     *
+     * @return EthicsAuditResult indicating overall score (0–100) and safety flag.
      */
     public EthicsAuditResult auditEthics(String text) {
         if (text == null || text.isBlank()) {
@@ -148,22 +186,15 @@ public class AIService {
                 }
             }
 
-            // LÓGICA DE AUDITORÍA ÉTICA (Enterprise-Grade)
-            // Severidades nativas de Azure: 0 (Safe), 2 (Low), 4 (Medium), 6 (High)
-
-            // 1. Calculamos un "Ethical Score" del 0 al 100 donde 100 = Perfectamente
-            // Ético/Seguro.
-            // Para proteger el sistema, nos basamos en el peor escenario (maxSeverity) en
-            // lugar de un promedio.
-            // Si hay un nivel 6 en 'Hate' y 0 en el resto, el texto NO ES 75% seguro, es 0%
-            // seguro.
+            // Ethical Score (enterprise-grade):
+            // Azure native severities: 0 (Safe), 2 (Low), 4 (Medium), 6 (High).
+            // Score is worst-case driven: one category at level 6 makes the whole
+            // text score 0, regardless of other categories.
             int ethicalScore = (int) Math.round(100.0 - ((maxSeverity / 6.0) * 100.0));
 
-            // 2. Determinamos la bandera crítica (Política de Tolerancia Inteligente)
-            // Cualquier categoría >= 2 hace que el contenido se marque como no seguro.
+            // Zero-tolerance: any severity >= 2 marks content as unsafe.
             boolean isSafe = maxSeverity < 2;
 
-            // 3. Generamos traza descriptiva para auditoría compliance
             String detailStr = detailsBuilder.length() > 0
                     ? detailsBuilder.toString().trim()
                     : "All categories reported 0 severity. Fully compliant.";

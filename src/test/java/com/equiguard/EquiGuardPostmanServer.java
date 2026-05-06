@@ -82,12 +82,13 @@ public class EquiGuardPostmanServer {
                 CosmosService cosmosService = CosmosService.getInstance();
 
                 System.out.println("🔍 Ejecutando PII Masking...");
-                AIService.PiiResult piiResult = aiService.maskPII(dataRequest.content());
+                AIService.PiiResult piiResult = aiService.maskPII(dataRequest.content(), dataRequest.language());
 
                 System.out.println("⚖️  Ejecutando Content Safety...");
                 EthicsAuditResult auditResult = aiService.auditEthics(dataRequest.content());
 
                 // 3. Construir Respuesta
+                String auditStatus = auditResult.isSafe() ? "OK" : "BLOCKED";
                 EquiGuardResponse responseRecord = new EquiGuardResponse(
                         dataRequest.requestId(),
                         dataRequest.content(),
@@ -95,7 +96,8 @@ public class EquiGuardPostmanServer {
                         piiResult.entities(),
                         auditResult.ethicalScore(),
                         auditResult.isSafe(),
-                        ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT));
+                        ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT),
+                        auditStatus);
 
                 // 4. Guardar en Cosmos
                 System.out.println("💾 Persistiendo en Cosmos DB...");
@@ -107,9 +109,9 @@ public class EquiGuardPostmanServer {
                 sendResponse(exchange, 200, jsonResponse);
 
             } catch (Exception e) {
-                System.err.println("💥 ERROR PROCESANDO PETICIÓN: " + e.getMessage());
-                e.printStackTrace(); // Esto nos dirá exactamente qué recurso de Azure está fallando
-                sendResponse(exchange, 500, "{\"error\":\"Security Audit Failure: " + e.getMessage() + "\"}");
+                System.err.println("💥 ERROR PROCESANDO PETICIÓN: " + e.getClass().getSimpleName());
+                e.printStackTrace();
+                sendResponse(exchange, 500, "{\"error\":\"Security Audit Failure\"}");
             }
         }
 

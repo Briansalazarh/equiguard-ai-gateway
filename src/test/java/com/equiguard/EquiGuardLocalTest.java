@@ -7,6 +7,7 @@ import com.equiguard.services.AIService;
 import com.equiguard.services.CosmosService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -18,15 +19,19 @@ import java.util.Map;
 
 /**
  * 🚀 SIMULADOR DE INTEGRACIÓN PARA EQUIGUARD AI
- * Esta clase permite probar el Middleware COMPLETO (AI + Cosmos) sin necesidad 
+ * Esta clase permite probar el Middleware COMPLETO (AI + Cosmos) sin necesidad
  * de que el servidor de Azure Functions esté corriendo localmente.
- * ¡Perfecto para tu demo y validación rápida!
+ *
+ * <p>Requires live Azure credentials configured in {@code local.settings.json}.
+ * Run with: {@code mvn test -P integration-tests}
  */
+@Tag("integration")
 public class EquiGuardLocalTest {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
     @Test
+    @Tag("integration")
     public void testFullMiddlewareFlow() {
         System.out.println("=================================================");
         System.out.println("🛡️  EQUIGUARD AI - SIMULADOR DE MIDDLEWARE  🛡️");
@@ -45,20 +50,21 @@ public class EquiGuardLocalTest {
             // 3. PREPARAR REQUEST DE PRUEBA (DATA TOUGH)
             String content = "Hola, soy Juan Pérez. Mi DNI es 12.345.678-9 y mi teléfono el 987-654-321. " +
                            "Me molesta mucho la gente de otros países, creo que no deberían permitirles entrar.";
-            
-            EquiGuardRequest request = new EquiGuardRequest("local-sim-test-001", content);
+
+            EquiGuardRequest request = new EquiGuardRequest("local-sim-test-001", content, "es");
             System.out.println("\n--- ENTRADA (PAYLOAD ORIGINAL) ---");
             System.out.println("ID: " + request.requestId());
             System.out.println("Contenido: " + request.content());
 
             // 4. EJECUTAR LÓGICA DE NEGOCIO (EL "CEREBRO")
             System.out.println("\n[3/4] Procesando Escudo de Privacidad (PII Masking)...");
-            AIService.PiiResult piiResult = aiService.maskPII(request.content());
+            AIService.PiiResult piiResult = aiService.maskPII(request.content(), request.language());
 
             System.out.println("[4/4] Auditando Ética y Sesgos (Content Safety)...");
             EthicsAuditResult auditResult = aiService.auditEthics(request.content());
 
             // 5. CONSTRUIR RESPUESTA FINAL
+            String auditStatus = auditResult.isSafe() ? "OK" : "BLOCKED";
             EquiGuardResponse response = new EquiGuardResponse(
                 request.requestId(),
                 request.content(),
@@ -66,7 +72,8 @@ public class EquiGuardLocalTest {
                 piiResult.entities(),
                 auditResult.ethicalScore(),
                 auditResult.isSafe(),
-                ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
+                ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT),
+                auditStatus
             );
 
             // 6. PERSISTIR EN COSMOS DB (ASINCRÓNICO -> BLOQUEAMOS PARA EL TEST)
@@ -83,9 +90,10 @@ public class EquiGuardLocalTest {
             System.out.println("\nFAIRNESS AUDITOR:");
             System.out.println(">> Ethical Score (0-100): " + response.ethicalScore());
             System.out.println(">> Contenido Seguro: " + (response.isSafe() ? "SÍ ✅" : "NO ❌"));
+            System.out.println(">> Audit Status: " + response.auditStatus());
             System.out.println(">> Traza: " + auditResult.severityDetails());
             System.out.println("=================================================");
-            
+
             System.out.println("\n🚀 ¡TODO FUNCIONA PERFECTO! Estás listo para ganar.");
 
         } catch (Exception e) {
@@ -95,7 +103,8 @@ public class EquiGuardLocalTest {
     }
 
     /**
-     * Hack para inyectar variables de entorno en tiempo de ejecución para el test.
+     * Loads environment variables from {@code local.settings.json} into
+     * System Properties so AppConfig can resolve them during testing.
      */
     private static void loadEnvFromSettings(File file) throws Exception {
         if (!file.exists()) {
@@ -104,10 +113,6 @@ public class EquiGuardLocalTest {
         JsonNode root = mapper.readTree(file);
         JsonNode values = root.get("Values");
         if (values != null && values.isObject()) {
-            // Este método usa reflexión o simplemente un log para avisar al usuario.
-            // Nota: En Java moderno no se puede modificar System.getenv() fácilmente, 
-            // así que las clases de servicio ya deben estar adaptadas para leer de Props si falla Env.
-            // Para este test, imprimiremos qué variables estamos detectando.
             Iterator<Map.Entry<String, JsonNode>> fields = values.fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();

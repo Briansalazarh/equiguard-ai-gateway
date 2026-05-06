@@ -3,8 +3,12 @@ package com.equiguard.models;
 import java.util.List;
 
 /**
- * The consolidated audit document that is returned to the user and persisted in
- * Cosmos DB.
+ * The consolidated audit document that is returned to the caller and persisted
+ * in Cosmos DB.
+ * <p>
+ * {@code auditStatus} values: {@code "OK"}, {@code "BLOCKED"} (unsafe content
+ * detected), or {@code "DEGRADED"} (ethics audit unavailable at processing
+ * time).
  */
 public record EquiGuardResponse(
         String id,
@@ -13,5 +17,6 @@ public record EquiGuardResponse(
         List<PiiEntityModel> piiEntities,
         int ethicalScore,
         boolean isSafe,
-        String timestamp) {
+        String timestamp,
+        String auditStatus) {
 }

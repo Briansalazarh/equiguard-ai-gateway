@@ -1,0 +1,194 @@
+openapi: "3.1.0"
+info:
+  title: EquiGuard AI Gateway
+  description: |
+    Enterprise Serverless Ethical Middleware that intercepts AI data pipelines
+    in real time to mask PII and audit content for bias and toxicity.
+  version: "1.0.0"
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://{functionApp}.azurewebsites.net/api
+    description: Azure Functions production endpoint
+    variables:
+      functionApp:
+        default: equiguard-ai-middleware
+        description: Azure Function App name
+
+security:
+  - functionKey: []
+
+paths:
+  /EquiGuardAudit:
+    post:
+      operationId: auditContent
+      summary: Audit content for PII and ethical compliance
+      description: |
+        Intercepts a text payload, masks any detected PII using Azure AI Language
+        (NER), audits the content for bias and toxicity using Azure AI Content
+        Safety, persists an immutable audit record to Cosmos DB, and returns the
+        enriched audit result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EquiGuardRequest"
+            examples:
+              safeContent:
+                summary: Content with PII — no toxicity
+                value:
+                  requestId: "req-20260101-001"
+                  content: "Call John Smith at +56 9 1234 5678 to confirm the interview."
+                  language: "en"
+              toxicContent:
+                summary: Content flagged as unsafe
+                value:
+                  requestId: "req-20260101-002"
+                  content: "I hate people from that country and they should be removed."
+                  language: "en"
+      responses:
+        "200":
+          description: Audit completed successfully (content may be BLOCKED or DEGRADED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EquiGuardResponse"
+        "400":
+          description: Validation error — malformed request or content too long
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Internal error — AI service or configuration fault
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: query
+      name: code
+      description: Azure Functions host key passed as the `code` query parameter.
+
+  schemas:
+    EquiGuardRequest:
+      type: object
+      required:
+        - requestId
+        - content
+      properties:
+        requestId:
+          type: string
+          description: Unique caller-supplied identifier for correlation and idempotency.
+          example: "req-20260101-001"
+        content:
+          type: string
+          description: |
+            Raw text to audit. Must not be blank and must not exceed 5 120
+            characters (Azure AI Language limit per document).
+          maxLength: 5120
+          example: "Call John Smith at +56 9 1234 5678 to confirm the interview."
+        language:
+          type: string
+          description: |
+            BCP-47 language tag used to improve NER accuracy.
+            Defaults to `es` when omitted.
+          default: "es"
+          example: "en"
+
+    EquiGuardResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Mirrors the requestId; also used as the Cosmos DB document ID.
+        originalContent:
+          type: string
+          description: The verbatim text as received from the caller.
+        maskedContent:
+          type: string
+          description: |
+            The text after PII replacement. Each entity is replaced by its
+            category label, e.g. `[Person]`, `[PhoneNumber]`.
+        piiEntities:
+          type: array
+          description: List of PII entities detected in the original content.
+          items:
+            $ref: "#/components/schemas/PiiEntityModel"
+        ethicalScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Compliance score (0–100). 100 = fully compliant; 0 = highest
+            possible toxicity (Azure severity 6 in any category).
+        isSafe:
+          type: boolean
+          description: |
+            `true` if all content-safety categories report severity < 2;
+            `false` otherwise.
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC ISO-8601 instant at which the audit was processed.
+        auditStatus:
+          type: string
+          enum: [OK, BLOCKED, DEGRADED]
+          description: |
+            `OK` — audit passed and content is safe.
+            `BLOCKED` — content flagged as unsafe (isSafe = false).
+            `DEGRADED` — PII masking succeeded but ethics audit was unavailable;
+            the record was persisted for manual review.
+
+    PiiEntityModel:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The original text of the detected entity.
+        category:
+          type: string
+          description: PII category label (e.g. `Person`, `PhoneNumber`, `Email`).
+        subcategory:
+          type: string
+          nullable: true
+          description: Optional sub-category when available.
+        confidenceScore:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        offset:
+          type: integer
+          description: Character offset in the original text.
+        length:
+          type: integer
+          description: Character length of the entity span.
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs.
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://equiguard.ai/errors/validation-error"
+        title:
+          type: string
+          example: "Validation Error"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "content exceeds the maximum allowed length of 5120 characters"
+        instance:
+          type: string
+          example: "/api/EquiGuardAudit"

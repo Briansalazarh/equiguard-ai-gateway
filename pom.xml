@@ -61,6 +61,12 @@
             <version>4.55.0</version>
         </dependency>
 
+        <!-- Azure Identity (DefaultAzureCredential / Managed Identity) -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-identity</artifactId>
+        </dependency>
+
         <!-- JSON Processing (Jackson) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -87,6 +93,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>5.11.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>3.25.3</version>
@@ -109,6 +121,15 @@
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+            <!-- Surefire: exclude integration-tagged tests from normal build -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <excludedGroups>integration</excludedGroups>
                 </configuration>
             </plugin>
             <!-- Azure Functions Plugin -->
@@ -154,4 +175,26 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Run integration tests (require live Azure credentials):
+             mvn test -P integration-tests -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <!-- Remove the exclusion so integration tests run -->
+                            <excludedGroups/>
+                            <groups>integration</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

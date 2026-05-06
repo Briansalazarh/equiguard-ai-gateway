@@ -4,16 +4,22 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "java",
     "AzureFunctionsJobHost__logging__logLevel__Default": "Information",
-    
+
     "AI_LANGUAGE_ENDPOINT": "https://[YOUR-LANGUAGE-SERVICE-NAME].cognitiveservices.azure.com/",
     "AI_LANGUAGE_KEY": "[YOUR-LANGUAGE-SERVICE-KEY]",
-    
+
     "CONTENT_SAFETY_ENDPOINT": "https://[YOUR-CONTENT-SAFETY-SERVICE-NAME].cognitiveservices.azure.com/",
     "CONTENT_SAFETY_KEY": "[YOUR-CONTENT-SAFETY-SERVICE-KEY]",
-    
+
     "COSMOS_DB_ENDPOINT": "https://[YOUR-COSMOS-ACCOUNT-NAME].documents.azure.com:443/",
     "COSMOS_DB_KEY": "[YOUR-COSMOS-ACCOUNT-KEY]",
     "COSMOS_DB_DATABASE_NAME": "EquiGuardDB",
-    "COSMOS_DB_CONTAINER_NAME": "AuditLogs"
+    "COSMOS_DB_CONTAINER_NAME": "AuditLogs",
+
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "[YOUR-APP-INSIGHTS-CONNECTION-STRING]"
+  },
+  "_comments": {
+    "Managed Identity": "Remove *_KEY values and assign the Function App's Managed Identity the following roles: 'Cognitive Services User' on AI resources and 'Cosmos DB Built-in Data Contributor' on the Cosmos account. The service will automatically use DefaultAzureCredential.",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "Optional. When set the Azure Functions runtime automatically sends logs, traces, and custom metrics to Application Insights."
   }
 }
